@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toko Roti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Young+Serif&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2d2a5a;--butter:#f6c945;--bg:#fffdf7;--line:#e4e0f0;--soft:#f3f1fb}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.55 "DM Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+h1,h2{font-family:"Young Serif",Georgia,serif;font-weight:400;line-height:1.1;margin:0}
+header{background:var(--butter);padding:56px 20px 48px}
+.wrap{max-width:960px;margin:0 auto}
+header h1{font-size:clamp(2.4rem,8vw,4.5rem);max-width:12ch}
+header p{max-width:42ch;margin:14px 0 0;font-size:1.1rem}
+main{padding:40px 20px}
+h2{font-size:1.8rem;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:20px}
+.card{border:2px solid var(--ink);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;background:#fff}
+.pic{height:150px;background:var(--soft);display:grid;place-items:center;font-size:3rem}
+.pic img{width:100%;height:100%;object-fit:cover}
+.body{padding:14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.body b{font-size:1.05rem}
+.body small{color:#5d5a85;flex:1}
+.price{font-weight:700}
+button{font:inherit;cursor:pointer;border:2px solid var(--ink);background:var(--ink);color:#fff;border-radius:999px;padding:9px 16px;font-weight:700}
+button:hover{background:#1f1d44}
+button:focus-visible,input:focus-visible{outline:3px solid var(--butter);outline-offset:2px}
+button.alt{background:#fff;color:var(--ink)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.qty{display:flex;align-items:center;gap:10px}
+.qty button{padding:2px 12px}
+#cart{margin-top:48px;border:2px solid var(--ink);border-radius:14px;padding:20px;background:var(--soft)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.total{font-size:1.2rem;font-weight:700;margin:14px 0}
+input{font:inherit;width:100%;padding:10px 12px;border:2px solid var(--ink);border-radius:10px;margin-bottom:10px;background:#fff}
+label{font-weight:500;display:block;margin-bottom:4px}
+.msg{margin:12px 0 0;font-weight:500}
+footer{padding:28px 20px;border-top:1px solid var(--line);font-size:.9rem}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<h1 id="nama-toko"></h1>
+<p>Roti dipanggang setiap pagi. Pilih rotinya, kirim pesanan lewat WhatsApp.</p>
+</div></header>
+
+<main><div class="wrap">
+<h2>Menu hari ini</h2>
+<div class="grid" id="daftar"><p>Memuat menu…</p></div>
+
+<section id="cart">
+<h2>Pesanan Anda</h2>
+<div id="isi"><p>Keranjang masih kosong. Tekan “Tambah” pada roti yang Anda mau.</p></div>
+<div class="total" id="total"></div>
+<div id="form" hidden>
+<label for="nama">Nama</label><input id="nama" autocomplete="name">
+<label for="hp">Nomor HP</label><input id="hp" inputmode="tel" autocomplete="tel">
+<label for="catatan">Catatan (opsional)</label><input id="catatan" placeholder="Contoh: diambil jam 10 pagi">
+<button id="kirim">Pesan lewat WhatsApp</button>
+<p class="msg" id="pesan" role="status"></p>
+</div>
+</section>
+</div></main>
+
+<footer><div class="wrap" id="kaki"></div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+// ====== UBAH BAGIAN INI ======
+const NAMA_TOKO   = "Toko Roti Anda";
+const WA_NOMOR    = "6281234567890";            // format 62..., tanpa + dan tanpa 0 di depan
+const SUPABASE_URL = "ISI_DENGAN_PROJECT_URL";
+const SUPABASE_KEY = "ISI_DENGAN_ANON_PUBLIC_KEY";
+// =============================
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const rp = n => "Rp" + Number(n).toLocaleString("id-ID");
+const $ = id => document.getElementById(id);
+let produk = [], keranjang = {};
+
+document.title = NAMA_TOKO;
+$("nama-toko").textContent = NAMA_TOKO;
+$("kaki").textContent = "© " + new Date().getFullYear() + " " + NAMA_TOKO;
+
+async function muat() {
+  const { data, error } = await db.from("products").select("*").eq("tersedia", true).order("nama");
+  if (error) { $("daftar").innerHTML = ""; $("daftar").textContent = "Menu belum bisa dimuat. Periksa URL dan key Supabase di index.html."; return; }
+  produk = data;
+  if (!data.length) { $("daftar").textContent = "Belum ada roti yang tersedia hari ini."; return; }
+  $("daftar").innerHTML = "";
+  data.forEach(p => {
+    const el = document.createElement("div");
+    el.className = "card";
+    const pic = document.createElement("div");
+    pic.className = "pic";
+    if (p.foto_url) { const im = document.createElement("img"); im.src = p.foto_url; im.alt = p.nama; pic.appendChild(im); }
+    else pic.textContent = "🥖";
+    const b = document.createElement("div");
+    b.className = "body";
+    const n = document.createElement("b"); n.textContent = p.nama;
+    const d = document.createElement("small"); d.textContent = p.deskripsi || "";
+    const h = document.createElement("span"); h.className = "price"; h.textContent = rp(p.harga);
+    const t = document.createElement("button"); t.textContent = "Tambah"; t.onclick = () => ubah(p.id, 1);
+    b.append(n, d, h, t);
+    el.append(pic, b);
+    $("daftar").appendChild(el);
+  });
+}
+
+function ubah(id, d) {
+  keranjang[id] = Math.max(0, (keranjang[id] || 0) + d);
+  if (!keranjang[id]) delete keranjang[id];
+  gambar();
+}
+
+function gambar() {
+  const ids = Object.keys(keranjang);
+  $("form").hidden = !ids.length;
+  if (!ids.length) { $("isi").innerHTML = "<p>Keranjang masih kosong. Tekan “Tambah” pada roti yang Anda mau.</p>"; $("total").textContent = ""; return; }
+  $("isi").innerHTML = "";
+  let total = 0;
+  ids.forEach(id => {
+    const p = produk.find(x => String(x.id) === id);
+    const q = keranjang[id]; total += p.harga * q;
+    const r = document.createElement("div"); r.className = "row";
+    const a = document.createElement("span"); a.textContent = p.nama + " (" + rp(p.harga) + ")";
+    const c = document.createElement("div"); c.className = "qty";
+    const m = document.createElement("button"); m.className = "alt"; m.textContent = "−"; m.setAttribute("aria-label", "Kurangi " + p.nama); m.onclick = () => ubah(p.id, -1);
+    const s = document.createElement("span"); s.textContent = q;
+    const pl = document.createElement("button"); pl.className = "alt"; pl.textContent = "+"; pl.setAttribute("aria-label", "Tambah " + p.nama); pl.onclick = () => ubah(p.id, 1);
+    c.append(m, s, pl); r.append(a, c); $("isi").appendChild(r);
+  });
+  $("total").textContent = "Total: " + rp(total);
+}
+
+$("kirim").onclick = async () => {
+  const nama = $("nama").value.trim(), hp = $("hp").value.trim(), catatan = $("catatan").value.trim();
+  if (!nama || !hp) { $("pesan").textContent = "Isi nama dan nomor HP dulu."; return; }
+  const items = Object.keys(keranjang).map(id => {
+    const p = produk.find(x => String(x.id) === id);
+    return { nama: p.nama, harga: p.harga, jumlah: keranjang[id] };
+  });
+  const total = items.reduce((t, i) => t + i.harga * i.jumlah, 0);
+  $("kirim").disabled = true;
+  const { error } = await db.from("orders").insert({ nama_pelanggan: nama, no_hp: hp, catatan, items, total });
+  $("kirim").disabled = false;
+  if (error) { $("pesan").textContent = "Pesanan gagal disimpan. Coba lagi sebentar."; return; }
+  const teks = "Halo " + NAMA_TOKO + ", saya mau pesan:\n" +
+    items.map(i => "- " + i.nama + " x" + i.jumlah).join("\n") +
+    "\nTotal: " + rp(total) + "\nNama: " + nama + "\nHP: " + hp + (catatan ? "\nCatatan: " + catatan : "");
+  window.open("https://wa.me/" + WA_NOMOR + "?text=" + encodeURIComponent(teks), "_blank");
+  keranjang = {}; gambar();
+  $("pesan").textContent = "Pesanan tersimpan. Lanjutkan konfirmasi di WhatsApp.";
+};
+
+muat();
+</script>
+</body>
+</html>
